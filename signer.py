@@ -70,9 +70,7 @@ def lambda_handler(event, context):
     token = cookies.get(COOKIE_NAME, None)
     if token is None:
         token = generate_token()
-        headers[
-            "set-cookie"
-        ] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
+        headers["set-cookie"] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
 
     url = _authed_request(
         secret=token,
@@ -85,7 +83,8 @@ def lambda_handler(event, context):
     headers["location"] = url
 
     body = dedent(
-        f"""<!DOCTYPE html>
+        f"""\
+        <!DOCTYPE html>
         <html>
         <body>
             <a href="{url}">Click me!</a>
