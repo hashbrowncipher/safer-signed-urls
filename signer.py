@@ -21,6 +21,7 @@ parser = ConfigParser()
 parser.read(environ["LAMBDA_TASK_ROOT"] + "/config.ini")
 config = parser["default"]
 
+load_credentials = Session().get_component("credential_provider").load_credentials
 
 def _replace_domain(url, domain):
     split = urlsplit(url)
@@ -28,9 +29,7 @@ def _replace_domain(url, domain):
 
 
 def _authed_request(secret, region, bucket, path, domain):
-    session = Session()
-
-    credentials = session.get_component("credential_provider").load_credentials()
+    credentials = load_credentials()
     auth = S3SigV4QueryAuth(credentials, "s3", region)
 
     mac = hmac.new(secret.encode(), b"/" + path.encode(), sha256).digest()
@@ -53,11 +52,11 @@ def _get_cookies(headers):
     return dict((k, v.value) for k, v in SimpleCookie(cookies).items())
 
 
-def to_headers(d):
+def _to_headers(d):
     return {key: [dict(key=key, value=value)] for key, value in d.items()}
 
 
-def generate_token():
+def _generate_token():
     return b64encode(urandom(16)).decode().replace("=","")
 
 
@@ -69,7 +68,7 @@ def lambda_handler(event, context):
 
     token = cookies.get(COOKIE_NAME, None)
     if token is None:
-        token = generate_token()
+        token = _generate_token()
         headers["set-cookie"] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
 
     url = _authed_request(
@@ -96,6 +95,6 @@ def lambda_handler(event, context):
     return dict(
         status=302,
         statusDescription="Found",
-        headers=to_headers(headers),
+        headers=_to_headers(headers),
         body=body,
     )
