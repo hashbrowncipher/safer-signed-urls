@@ -15,7 +15,7 @@ s3_bucket_region = ${var.region}
 s3_bucket = ${aws_s3_bucket.private.bucket}
 s3_object = ${aws_s3_object.test.key}
 cf_domain = ${var.domain_name}
-pepper = ${random_string.pepper.result}
+pepper = ${random_password.pepper.result}
 EOT
   }
 }

@@ -183,7 +183,7 @@ resource "aws_cloudfront_distribution" "assets" {
 # through Cloudfront. I'm not sure what value it provides, because our primary
 # goal isn't really to force people to go through Cloudfront, but rather to
 # prevent link previews from getting the data.
-resource "random_string" "pepper" {
+resource "random_password" "pepper" {
   length  = 23 # log_2(52^23) is 131 bits of entropy
   special = false
 }
@@ -194,7 +194,7 @@ resource "aws_cloudfront_function" "hmac" {
   publish = true
   code    = templatefile(
     "${path.module}/hmac.js.tftpl",
-    { pepper = random_string.pepper.result }
+    { pepper = random_password.pepper.result }
   )
 }
 
