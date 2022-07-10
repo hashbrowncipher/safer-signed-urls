@@ -49,15 +49,17 @@ def _get_cookies(headers):
         cookies = headers["cookie"][0]["value"]
     except KeyError:
         return ret
-        
+
     return dict((k, v.value) for k, v in SimpleCookie(cookies).items())
 
 
 def to_headers(d):
     return {key: [dict(key=key, value=value)] for key, value in d.items()}
 
+
 def generate_token():
     return b64encode(urandom(16)).decode()
+
 
 def lambda_handler(event, context):
     request = event["Records"][0]["cf"]["request"]
@@ -68,7 +70,9 @@ def lambda_handler(event, context):
     token = cookies.get(COOKIE_NAME, None)
     if token is None:
         token = generate_token()
-        headers["set-cookie"] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Strict"
+        headers[
+            "set-cookie"
+        ] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Strict"
 
     url = _authed_request(
         secret=token,
@@ -96,4 +100,3 @@ def lambda_handler(event, context):
         headers=to_headers(headers),
         body=body,
     )
-
