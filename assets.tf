@@ -184,7 +184,7 @@ resource "aws_cloudfront_distribution" "assets" {
 # goal isn't really to force people to go through Cloudfront, but rather to
 # prevent link previews from getting the data.
 resource "random_password" "pepper" {
-  length  = 23 # log_2(52^23) is 131 bits of entropy
+  length  = 22 # log_2(62^22) is 131 bits of entropy
   special = false
 }
 
