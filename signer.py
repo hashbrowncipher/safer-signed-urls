@@ -72,7 +72,7 @@ def lambda_handler(event, context):
         token = generate_token()
         headers[
             "set-cookie"
-        ] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Strict"
+        ] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
 
     url = _authed_request(
         secret=token,
