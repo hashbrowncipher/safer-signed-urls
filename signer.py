@@ -58,7 +58,7 @@ def to_headers(d):
 
 
 def generate_token():
-    return b64encode(urandom(16)).decode()
+    return b64encode(urandom(16)).decode().replace("=","")
 
 
 def lambda_handler(event, context):
@@ -73,7 +73,7 @@ def lambda_handler(event, context):
         headers["set-cookie"] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
 
     url = _authed_request(
-        secret=token,
+        secret=config["pepper"] + token,
         region=config["s3_bucket_region"],
         bucket=config["s3_bucket"],
         path=config["s3_object"],
