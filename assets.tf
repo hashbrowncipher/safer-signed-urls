@@ -60,11 +60,12 @@ resource "aws_s3_object" "test" {
 }
 
 resource "aws_cloudfront_distribution" "assets" {
-  aliases         = [var.domain_name]
-  comment         = "Authentication for s3://${aws_s3_bucket.private.bucket}"
-  enabled         = true
-  is_ipv6_enabled = true
-  price_class     = "PriceClass_100"
+  aliases             = [var.domain_name]
+  comment             = "Authentication for s3://${aws_s3_bucket.private.bucket}"
+  enabled             = true
+  is_ipv6_enabled     = true
+  price_class         = "PriceClass_100"
+  wait_for_deployment = false
 
   origin {
     domain_name = aws_s3_bucket.private.bucket_regional_domain_name
@@ -192,7 +193,7 @@ resource "aws_cloudfront_function" "hmac" {
   name    = "hmac"
   runtime = "cloudfront-js-1.0"
   publish = true
-  code    = templatefile(
+  code = templatefile(
     "${path.module}/hmac.js.tftpl",
     { pepper = random_password.pepper.result }
   )
