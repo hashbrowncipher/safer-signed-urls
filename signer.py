@@ -14,7 +14,7 @@ from botocore.session import Session
 from botocore.auth import S3SigV4QueryAuth
 from botocore.awsrequest import AWSRequest
 
-COOKIE_NAME = "cf-secret"
+COOKIE_NAME = "secret"
 HEADER_NAME = "cf-auth"
 
 parser = ConfigParser()
@@ -23,16 +23,17 @@ config = parser["default"]
 
 load_credentials = Session().get_component("credential_provider").load_credentials
 
+
 def _replace_domain(url, domain):
     split = urlsplit(url)
     return urlunsplit(split._replace(netloc=domain))
 
 
-def _authed_request(secret, region, bucket, path, domain):
+def _authed_request(*, pepper, secret, region, bucket, path, domain):
     credentials = load_credentials()
     auth = S3SigV4QueryAuth(credentials, "s3", region)
 
-    mac = hmac.new(secret.encode(), b"/" + path.encode(), sha256).digest()
+    mac = hmac.new(pepper.encode(), f"{secret}/{path}".encode(), sha256).digest()
     headers = {HEADER_NAME: b64encode(mac).decode()}
     url = f"https://{bucket}.s3.{region}.amazonaws.com/{path}"
 
@@ -57,7 +58,7 @@ def _to_headers(d):
 
 
 def _generate_token():
-    return b64encode(urandom(16)).decode().replace("=","")
+    return b64encode(urandom(16)).decode().replace("=", "")
 
 
 def lambda_handler(event, context):
@@ -72,7 +73,8 @@ def lambda_handler(event, context):
         headers["set-cookie"] = f"{COOKIE_NAME}={token}; Secure; HttpOnly; SameSite=Lax"
 
     url = _authed_request(
-        secret=config["pepper"] + token,
+        pepper=config["pepper"],
+        secret=token,
         region=config["s3_bucket_region"],
         bucket=config["s3_bucket"],
         path=config["s3_object"],

@@ -1,49 +1,104 @@
-Combines cookie-based authentication with S3-signed URLs
+Safer S3 signed URLs
 
-## Abstractly
+## The problem
 
-With a typical signed URL, anyone who gets the URL can retrieve the asset. This
-makes signed URLs dangerous, because many pieces of software are happy to issue
-HTTP GETs against any URL they see, without regard to user privacy.
+A webserver controls access to content. Maybe that content is photos, maybe
+it's proprietary-licensed software, maybe it's bank statements. Let's stick
+with photos for now, like the photo-sharing products from Google or Facebook.
 
-The typical alternative is cookie-based authZ, but these usually require a
-stateful database lookup to make the granular determination of whether a user
-should have access to a given resource. For instance, many webappscheck a
-user's identity (AuthN), determine whether they should be able to access a
-certain resource (AuthZ), and then serve the resource. But oftentimes the last
-step (serving the resource) is costly from a performance perspective, and we
-would prefer to decouple the security tasks from the byte-shoveling tasks.
+For any given photo, there's a list of people who should have access to it;
+this list changes over time.  The webserver is good at figuring out which
+photos should be accessible to which people. It's less good at storing and
+serving the photos: it offloads that task to a blobstore, like Amazon S3.
 
-This solution melds both of the above techniques. With this approach, each user
-is issued a cookie when they log in. Users request resources, and a webapp
-decides which requests to authorize on a granular basis. When authorization is
-successful, the webapp issues a signed URL to the client, which the client then
-uses to retrieve the data. The signed URL cannot be used on its own: S3 only
-sends the data when the request contains both the signed URL and the same
-user's cookie.
+Amazon S3 isn't very good at figuring out which users should have access to
+which content. It essentially has two modes: public and private. In public
+mode, anyone who knows a photo's location in the blobstore can download it. In
+private mode, IAM credentials are needed. We can't grant users IAM credentials:
+AWS IAM was built for hundreds or low-thousands of infrequently changing users,
+which is too few for our service.
 
-## Concretely
+One solution is for the webserver to sign URLs and pass them to users.
+Provision the webserver with credentials to access any photo. When it decides
+to show a photo to a given user, it signs a request (a URL) for the photo to
+S3, but it sends the request to the user, rather than to S3. The user receives
+the URL, sends it to S3, and receives a photo.
 
-    Client ---> Cloudfront -> S3
-           |
-           ---> Webapp
-           
+The problem with this approach is that URLs are generally not considered
+secret. Browser extensions scrape them. Search engines index them. Chat clients
+preview them. With signed URLs, it is very easy for a user to leak access to
+others, usually without knowing it. The [AWS docs][aws] say:
 
-1. An S3 bucket holds private data.
-2. A cloudfront distribution sits receives client traffic, with its origin
-   pointing at the S3 bucket. Cloudfront does _not_ have the requisite
-credentials to retrieve data from the S3 bucket on its own.
-3. A "webapp" (in this case a Python script running within Lambda@Edge) issues
-   cookies to its users, and signs URL pointing at Cloudfront. It does this
-according to whatever authorization logic makes sense for its needs. The signed
-URLs it sends to its callers are configured to require an additional header;
-clients never receive this header.
-4. Clients use their signed URLs, which lead them to make requests against
-   Cloudfront. When a request arrives at Cloudfront, a Cloudfront Function
-examines the cookie sent with the request, and performs a cryptographic
-operation (HMAC) with a shared-secret known to the Cloudfront Function (and the
-webapp). Cloudfront appends the computed HMAC as a header atop the user's
-request and sends it upstream to the S3 bucket.
-5. When the request reaches S3, AWS IAM examines the signature on the request.
-   Since cloudfront added the header, AWS IAM allows the request. If the
-   request had bypassed Cloudfront, AWS IAM would reject it.
+[aws]: https://docs.aws.amazon.com/general/latest/gr/sigv4-add-signature-to-request.html
+
+    ⚠️ Important
+
+    If you make a request in which all parameters are included in the query string,
+    the resulting URL represents an AWS action that is already authenticated.
+    Therefore, treat the resulting URL with as much caution as you would treat your
+    actual credentials. We recommend you specify a short expiration time for the
+    request with the X-Amz-Expires parameter.
+
+I think this overstates the problem: a signed URL is good for retrieving
+exactly one thing, whereas my credentials can retrieve anything. There's a
+difference. But the message remains the same: a signed URL is a transferrable
+[capability][capability] to access data, and beause the capability is wrapped
+up in a URL it can be very easily and casually transferred.
+
+[capability]: https://en.wikipedia.org/wiki/Capability-based_security
+
+What we'd like is some way to make it a bit more difficult to casually transfer
+the URL. We're not trying to prevent the data from escaping entirely: the goal
+isn't a DRM solution. Instead, we just want it to be mildly difficult, in a
+"locks keep honest people out" sense.
+
+## Solution
+
+Split the capability into two parts:
+1. the signed URL
+2. a cookie, known by the user's browser but not typically displayed
+
+Amazon S3 can be instructed to look for the presence of a particular header
+when authorizing a request, through the SignedHeaders feature of AWS
+SignatureV4. Unfortunately for us, we cannot set cookies on S3 domain names.
+But we can set cookies on our own domain names, and use a CDN to forward
+requests to S3. In this example I chose Cloudfront.
+
+I think in principle it would be possible to have S3 authenticate directly on
+the user's Cookie header. In practice, I found that Cloudfront disallows
+sending the cookie header, at least to S3 origins. We could copy the cookie
+directly into a header and send it to S3, but this has a few minor drawbacks:
+1. S3 outputs detailed error messages when an incorrect signature is produced.
+   These include the values passed to it, which would reveal the user's cookie
+on their screen.
+2. If the cookie allows the user to access other parts of your service, then
+   this makes S3 part of your threat model. If S3 started logging its inbound
+headers, you'd be giving your cookies directly to S3.  if you get a signature
+wrong
+
+I ended up sending the header to S3 as HMAC(pepper, cookie + path). The
+[pepper][pepper] is a fixed secret known to my webapp and Cloudfront. It
+ensures that users cannot circumvent my CDN to produce a "fully signed" URL
+from the partial ones I am giving them. This transformation occurs within a
+Cloudfront function.
+
+[pepper]: https://en.wikipedia.org/wiki/Pepper_(cryptography)
+
+The full flow is:
+1. user visits my webapp and requests a link to a given resource
+2. webapp checks that the user should have access
+3. webapp takes user's cookie, a fixed secret pepper, and the requested path
+   and computes secret=HMAC(pepper, cookie + path)
+4. webapp signs a URL to access the resource in S3, with an additional signed
+   header containing the calculated secret.
+5. webapp replaces the S3 host in the URL with the hostname of my Cloudfront
+   distribution.
+5. webapp sends the signed URL to the user, but omits the secret
+6. user's browser requests the URL it received, and sends its cookie.
+7. a cloudfront function recomputes the secret that the webapp computed in step
+   3 and adds it to the request.
+8. cloudfront makes the request and returns the result to the user.
+
+This repository contains Terraform code sufficient to demonstrate the solution.
+For my "webapp", I made a Lambda@Edge function in Python that grants access to
+a single fixed resource in S3 to anyone who requests it.
