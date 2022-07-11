@@ -85,7 +85,7 @@ resource "aws_cloudfront_distribution" "assets" {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "private"
-    viewer_protocol_policy = "https-only"
+    viewer_protocol_policy = "redirect-to-https"
 
     default_ttl = 0
     min_ttl     = 0
@@ -114,7 +114,7 @@ resource "aws_cloudfront_distribution" "assets" {
     cached_methods  = ["GET", "HEAD", "OPTIONS"]
 
     target_origin_id       = "public"
-    viewer_protocol_policy = "https-only"
+    viewer_protocol_policy = "redirect-to-https"
 
     default_ttl = 0
     min_ttl     = 0
@@ -140,7 +140,7 @@ resource "aws_cloudfront_distribution" "assets" {
     cached_methods  = ["GET", "HEAD", "OPTIONS"]
 
     target_origin_id       = "public"
-    viewer_protocol_policy = "https-only"
+    viewer_protocol_policy = "redirect-to-https"
     path_pattern           = "/_errors/*"
 
 
