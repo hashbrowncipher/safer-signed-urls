@@ -91,6 +91,13 @@ Cloudfront function.
 
 [pepper]: https://en.wikipedia.org/wiki/Pepper_(cryptography)
 
+So in total there are two shared secrets:
+ 1. the cookie: prevents the signed URL from being used outside of the original
+    browser to which it was issued.
+ 2. the pepper: ensures that all traffic goes through the CDN, rather than
+    directly to S3. This isn't necessary to protect against the original threat
+model, and is more of a nice-to-have.
+
 The full flow is:
 1. user visits my webapp and requests a link to a given resource
 2. webapp checks that the user should have access
