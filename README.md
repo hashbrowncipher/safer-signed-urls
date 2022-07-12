@@ -1,13 +1,13 @@
 Safer S3 signed URLs
 
-## The problem
+## Problem
 
 A webserver controls access to content. Maybe that content is photos, maybe
 it's proprietary-licensed software, maybe it's bank statements. Let's stick
 with photos for now, like the photo-sharing products from Google or Facebook.
 
 For any given photo, there's a list of people who should have access to it;
-this list changes over time.  The webserver is good at figuring out which
+this list changes over time. The webserver is good at figuring out which
 photos should be accessible to which people. It's less good at storing and
 serving the photos: it offloads that task to a blobstore, like Amazon S3.
 
@@ -39,11 +39,12 @@ others, usually without knowing it. The [AWS docs][aws] say:
     actual credentials. We recommend you specify a short expiration time for the
     request with the X-Amz-Expires parameter.
 
-I think this overstates the problem: a signed URL is good for retrieving
-exactly one thing, whereas my credentials can retrieve anything. There's a
-difference. But the message remains the same: a signed URL is a transferrable
-[capability][capability] to access data, and beause the capability is wrapped
-up in a URL it can be very easily and casually transferred.
+I think this warning overstates the problem: a signed URL is good for
+retrieving exactly one thing, whereas raw credentials can retrieve anything.
+There's a difference. But the message remains the same: a signed URL is a
+transferrable [capability][capability] to access data, and beause the
+capability is wrapped up in a URL it can be very easily and casually
+transferred.
 
 [capability]: https://en.wikipedia.org/wiki/Capability-based_security
 
@@ -51,6 +52,12 @@ What we'd like is some way to make it a bit more difficult to casually transfer
 the URL. We're not trying to prevent the data from escaping entirely: the goal
 isn't a DRM solution. Instead, we just want it to be mildly difficult, in a
 "locks keep honest people out" sense.
+
+Other solutions shorten the window of vulnerability—usually by setting a short
+expiry time on the signed URL—or attempt to invalidate the URL after it is
+first fetched. The former technique affects usability without providing much
+security. The latter requires a database of links that have or have not been
+used.
 
 ## Solution
 
