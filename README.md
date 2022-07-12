@@ -41,7 +41,7 @@ others, usually without knowing it. The [AWS docs][aws] say:
 
 I think this warning overstates the problem: a signed URL is good for
 retrieving exactly one thing, whereas raw credentials can retrieve anything.
-There's a difference. But the message remains the same: a signed URL is a
+There's a difference. But the message is still valid: a signed URL is a
 transferrable [capability][capability] to access data, and beause the
 capability is wrapped up in a URL it can be very easily and casually
 transferred.
